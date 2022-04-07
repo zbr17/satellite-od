@@ -1,0 +1,4 @@
+results/
+data/raw_data/*.csv
+data/data.ckpt
+__pycache__/
