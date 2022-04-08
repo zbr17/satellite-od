@@ -72,5 +72,10 @@ torch.save(data_to_save, "data.ckpt")
 
 #%%
 # Plot the data
-plt.plot(data_normed[:,0])
+for i in range(7):
+    plt.figure()
+    plt.plot(data_normed[:,i])
 
+
+#%%
+pd.to_datetime(1627577388568*1000000)

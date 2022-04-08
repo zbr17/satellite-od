@@ -32,8 +32,9 @@ class Transformer(nn.Module):
         self.dropout = dropout
         self.src_mask = None
         
+
         self.input_embedder = nn.Linear(self.input_size, self.feature_size)
-        self.position_encoder = PositionEncoder(dim=self.feature_size)
+        self.position_encoder = PositionEncoder(dim=self.input_size)
         self.encoder_layer = nn.TransformerEncoderLayer(d_model=self.feature_size, nhead=self.nhead, dropout=self.dropout)
         self.transformer_encoder = nn.TransformerEncoder(self.encoder_layer, num_layers=self.num_layers)
         self.decoder = nn.Linear(self.feature_size, self.input_size)
@@ -52,8 +53,8 @@ class Transformer(nn.Module):
             mask = self._generate_square_subsequent_mask(len(src)).to(device)
             self.src_mask = mask
 
-        src = self.input_embedder(src)
         src = self.position_encoder(src)
+        src = self.input_embedder(src)
         output = self.transformer_encoder(src, self.src_mask)
         output = self.decoder(output)
         return output
