@@ -1,34 +1,29 @@
-from email.policy import default
 import os
 import shutil
 import torch
-from torch.utils.data.dataloader import DataLoader
 import numpy as np
 from tqdm import tqdm 
 
-from src.dataset import TimeSeries
-from src.model import Transformer
+from src.dataset import give_dataloader
+from src.model import classifier
 
 import logger
 import argparse
 
 parser = argparse.ArgumentParser()
-parser.add_argument("--num_layers", type=int, default=20)
 parser.add_argument("--lr", type=float, default=0.001)
 parser.add_argument("--name", type=str, default="test")
 args = parser.parse_args()
 
 class config:
     # dataset
-    train_idx_ratio = 0.9
-    input_length = 100
-    output_length = 10
-    input_size = 7
+    split_ratio = {
+        "train": 0.9,
+        "val": 0.05,
+        "test": 0.05
+    }
     # model
-    feature_size = 64
-    num_layers = 20
-    nhead = 8
-    dropout = 0.1
+    size_list = [7, 64, 64, 2]
     # optimizer
     lr = 0.001
     weight_decay = 1e-4
@@ -36,13 +31,12 @@ class config:
     step_size = 10
     gamma = 0.5
     # general settings
-    epochs = 100
-    save_path = "./results/trial1"
+    epochs = 1
+    save_path = "./results/test"
     save_interval = 10
-    batch_size = 256
+    batch_size = 2048
 
 config.lr = args.lr
-config.num_layers = args.num_layers
 config.save_path = os.path.join("./results", args.name)
 
 if os.path.exists(config.save_path):
@@ -51,24 +45,11 @@ logger.config_logger(output_dir=config.save_path, dist_rank=0, name="LOG")
 device = torch.device("cuda:0")
 
 # get dataset
-sample_set = TimeSeries(data_path="./data/data.ckpt", input_size=config.input_length, output_size=config.output_length, data_mask=None)
-train_idx_end = int(config.train_idx_ratio*len(sample_set))
-train_idx_mask = torch.arange(train_idx_end)
-val_idx_mask = torch.arange(train_idx_end+1, len(sample_set))
-train_set = TimeSeries(data_path="./data/data.ckpt", input_size=config.input_length, output_size=config.output_length, data_mask=train_idx_mask)
-val_set = TimeSeries(data_path="./data/data.ckpt", input_size=config.input_length, output_size=config.output_length, data_mask=val_idx_mask)
-
-# get dataloader
-train_loader = DataLoader(train_set, batch_size=config.batch_size, shuffle=True, num_workers=8)
-val_loader = DataLoader(val_set, batch_size=config.batch_size, shuffle=False, num_workers=8)
+train_loader, val_loader, test_loader = give_dataloader(config)
 
 # get model
-model = Transformer(
-    input_size=config.input_size,
-    feature_size=config.feature_size,
-    num_layers=config.num_layers,
-    nhead=config.nhead,
-    dropout=config.dropout
+model = classifier(
+    size_list=config.size_list
 ).to(device)
 
 # get optimizer and scheduler
@@ -76,22 +57,20 @@ optimizer = torch.optim.Adam(model.parameters(), lr=config.lr, weight_decay=conf
 scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=config.step_size, gamma=config.gamma)
 
 # get criterion
-criterion = torch.nn.MSELoss().to(device)
+criterion = torch.nn.CrossEntropyLoss().to(device)
 
-# Start to train
-for epoch in range(config.epochs):
-    logger.info(f"Epoch {epoch}")
-
-    loss_list = []
+def train_one_epoch(train_loader, model, criterion, optimizer, scheduler, config):
+    logger.info("Training phase:")
     train_iter = tqdm(train_loader)
+    loss_list = []
     for idx, (data, target) in enumerate(train_iter):
         # data to device
-        data = data.to(device).float().permute(1,0,2)
-        target = target.to(device).float().permute(1,0,2)
+        data = data.to(device)
+        target = target.to(device)
         # model forward
         output = model(data)
         # compute loss
-        loss = criterion(output[-config.output_length:], target)
+        loss = criterion(output, target)
         loss_list.append(loss.item())
         if idx % 10 == 0:
             train_iter.set_description(f"Loss: {loss.item()}")
@@ -103,6 +82,46 @@ for epoch in range(config.epochs):
     
     scheduler.step()
     logger.info(f"Loss: {np.sum(loss_list)}")
+
+def validate(loader, model, criterion, config):
+    logger.info("Validation phase:")
+    data_iter = tqdm(loader)
+    loss_list = []
+    acc_list = []
+    TP, FP, TN, FN = 0, 0, 0, 0
+    with torch.no_grad():
+        for idx, (data, target) in enumerate(data_iter):
+            # data to device
+            data = data.to(device)
+            target = target.to(device)
+            # model forward
+            output = model(data)
+            # compute loss
+            loss = criterion(output, target)
+            loss_list.append(loss.item())
+            # compute acc
+            pred = torch.max(output, dim=-1)[1]
+            acc_list.append((torch.sum(target==pred) / len(target)).item())
+            # statistic the confusion matrix
+            TP += torch.sum((pred==0) & (target==0))
+            FP += torch.sum((pred==1) & (target==0))
+            TN += torch.sum((pred==1) & (target==1))
+            FN += torch.sum((pred==0) & (target==1))
+
+    logger.info(f"Loss: {np.sum(loss_list)}, Acc: {np.mean(acc_list)}")
+    logger.info(f"TP: {TP}/{TP+FP}, FP: {FP}/{TP+FP}, TN: {TN}/{TN+FN}, FN: {FN}/{TN+FN}")
+
+# Start to train
+for epoch in range(config.epochs):
+    logger.info(f"Epoch {epoch}")
+
+    # train one epoch
+    train_one_epoch(train_loader, model, criterion, optimizer, scheduler, config)
+
+    # validation
+    validate(val_loader, model, criterion, config)
+    
+        
     if epoch % config.save_interval == 0:
         to_save_dict = {
             "model": model,
@@ -111,3 +130,6 @@ for epoch in range(config.epochs):
             "epoch": epoch
         }
         torch.save(to_save_dict, os.path.join(config.save_path, f"model-{epoch}.ckpt"))
+
+# test
+validate(test_loader, model, criterion, config)

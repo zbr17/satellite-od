@@ -10,9 +10,9 @@ from tqdm import tqdm
 #%%
 # Configuration
 class config:
-    start_idx_ratio = 0.5
-    num_idx = 595842
     num_params = 7
+    non_nan_thresh = 4
+    abnormal_flag = 1627577388568
 
 #%%
 # Load all the data
@@ -25,26 +25,17 @@ for file_name in tqdm(file_list):
     data_dict[file_idx] = pd.read_csv(os.path.join(data_path, file_name))
 data_list = [data_dict[idx] for idx in sorted(list(data_dict.keys()), reverse=False)]
 data = pd.concat(data_list, axis=0)
-## time to zero
-config.time_idx_min = np.min(data['time'])
-data['time'] = data['time'] - np.min(data['time'])
-
-def time2idx(time):
-    return time - config.time_idx_min
-
-# # Plot the data
-# print("total", len(data))
-# for i in range(config.num_params):
-#     print(f"param{i}", sum(~np.isnan(data[f"param{i}"])))
 
 #%%
 # Interpolation
 
 ## Compute the interpolation points
+non_nan_pos = ~np.isnan(data.values)
+non_nan_pos, = np.where(np.sum(non_nan_pos, axis=1) > config.non_nan_thresh)
+
+sub_data = data.iloc[non_nan_pos]
 time_idx = data['time'].values
-step = int(time_idx.max() / config.num_idx)
-start = int(config.start_idx_ratio * step)
-interp_idx = np.array(range(start, time_idx.max(), step))[:config.num_idx] # drop the last few samples
+interp_idx = sub_data['time'].values
 
 ## Linear interpolation
 data_aligned = []
@@ -61,11 +52,19 @@ mean_value = np.mean(data_aligned, axis=0, keepdims=True)
 std_value = np.std(data_aligned, axis=0, keepdims=True)
 data_normed = (data_aligned - mean_value) / (std_value + 1e-8)
 
+#%%
+# Generate the label
+flag = config.abnormal_flag
+label = np.zeros_like(interp_idx)
+label[interp_idx > flag] = 1
+
 #%% 
 # Save to PyTorch.ckpt
 
 data_to_save = {
-    "data": torch.from_numpy(data_normed),
+    "data": torch.from_numpy(data_normed).float(),
+    "time": torch.from_numpy(interp_idx).long(),
+    "label": torch.from_numpy(label).long()
 }
 
 torch.save(data_to_save, "data.ckpt")
