@@ -1,4 +1,4 @@
 results/
-data/raw_data/*.csv
-data/data.ckpt
+data/raw_data/*/*.csv
+data/*.ckpt
 __pycache__/

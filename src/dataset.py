@@ -1,4 +1,3 @@
-from sklearn.utils import shuffle
 from torch.utils.data.dataset import Dataset
 from torch.utils.data.dataloader import DataLoader
 import torch
@@ -27,10 +26,10 @@ class SampleSet(Dataset):
         return len(self.data)
     
     def __getitem__(self, index):
-        return self.data[index], self.label[index]
+        return self.data[index], self.label[index], self.time[index]
 
 def give_dataloader(config):
-    sample_set = SampleSet(data_path="./data/data.ckpt", data_mask=None)
+    sample_set = SampleSet(data_path=config.data_path, data_mask=None)
     label = sample_set.label
     pos_idx = torch.where(label == 0)[0]
     neg_idx = torch.where(label == 1)[0]
@@ -51,9 +50,9 @@ def give_dataloader(config):
     train_pos, val_pos, test_pos = torch.utils.data.random_split(pos_idx, pos_split_num)
     train_neg, val_neg, test_neg = torch.utils.data.random_split(neg_idx, neg_split_num)
 
-    train_set = SampleSet(data_path="./data/data.ckpt", data_mask=torch.tensor(train_pos + train_neg))
-    val_set = SampleSet(data_path="./data/data.ckpt", data_mask=torch.tensor(val_pos + val_neg))
-    test_set = SampleSet(data_path="./data/data.ckpt", data_mask=torch.tensor(test_pos + test_neg))
+    train_set = SampleSet(data_path=config.data_path, data_mask=torch.tensor(train_pos + train_neg))
+    val_set = SampleSet(data_path=config.data_path, data_mask=torch.tensor(val_pos + val_neg))
+    test_set = SampleSet(data_path=config.data_path, data_mask=torch.tensor(test_pos + test_neg))
 
     train_loader = DataLoader(train_set, batch_size=config.batch_size, shuffle=True, num_workers=8, drop_last=True)
     val_loader = DataLoader(val_set, batch_size=config.batch_size, shuffle=False, num_workers=8, drop_last=False)

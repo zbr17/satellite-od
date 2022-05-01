@@ -1,5 +1,4 @@
 #%%
-from audioop import reverse
 import pandas as pd 
 import matplotlib.pyplot as plt
 import os
@@ -10,21 +9,32 @@ from tqdm import tqdm
 #%%
 # Configuration
 class config:
-    num_params = 7
+    num_params = 10
     non_nan_thresh = 4
-    abnormal_flag = 1627577388568
+    data_name = "Y"
+    data_path = "./data/raw_data/"
+    data_out = "./data/"
+    abnormal_flag = 1586851000000
+
+print(pd.to_datetime(config.abnormal_flag*1000000))
+df = pd.DataFrame({'date': ['2020-04-14 08:00:00.000']})
+df['date'] = pd.to_datetime(df['date'])
+df['date'] = df['date'].astype('int64')
+print(df)
 
 #%%
 # Load all the data
-# data_path = "./data/raw_data"
-data_path = "./raw_data"
+os.chdir("/home/zbr/Workspace/proj/space")
+data_path = os.path.join(config.data_path, config.data_name)
 file_list = os.listdir(data_path)
+file_list = [item for item in file_list if ".csv" in item]
 data_dict = {}
 for file_name in tqdm(file_list):
     file_idx = int(file_name.split(".")[0])
     data_dict[file_idx] = pd.read_csv(os.path.join(data_path, file_name))
 data_list = [data_dict[idx] for idx in sorted(list(data_dict.keys()), reverse=False)]
 data = pd.concat(data_list, axis=0)
+print(data)
 
 #%%
 # Interpolation
@@ -67,7 +77,7 @@ data_to_save = {
     "label": torch.from_numpy(label).long()
 }
 
-torch.save(data_to_save, "data.ckpt")
+torch.save(data_to_save, f"{os.path.join(config.data_out, config.data_name)}.ckpt")
 
 #%%
 # Plot the data
@@ -75,6 +85,4 @@ for i in range(7):
     plt.figure()
     plt.plot(data_normed[:,i])
 
-
-#%%
-pd.to_datetime(1627577388568*1000000)
+# %%
