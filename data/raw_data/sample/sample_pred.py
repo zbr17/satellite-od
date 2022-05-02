@@ -9,8 +9,9 @@ from tqdm import tqdm
 #%%
 # Configuration
 class config:
+    start_idx_ratio = 0.5
+    num_idx = 595842
     num_params = 7
-    non_nan_thresh = 4
     data_name = "sample"
     data_path = "./data/raw_data/"
     data_out = "./data/"
@@ -35,16 +36,19 @@ for file_name in tqdm(file_list):
 data_list = [data_dict[idx] for idx in sorted(list(data_dict.keys()), reverse=False)]
 data = pd.concat(data_list, axis=0)
 
+# Check the data
+print("total", len(data))
+for i in range(config.num_params):
+    print(f"param{i}", sum(~np.isnan(data[f"param{i}"])))
+
 #%%
 # Interpolation
 
 ## Compute the interpolation points
-non_nan_pos = ~np.isnan(data.values)
-non_nan_pos, = np.where(np.sum(non_nan_pos, axis=1) > config.non_nan_thresh)
-
-sub_data = data.iloc[non_nan_pos]
 time_idx = data['time'].values
-interp_idx = sub_data['time'].values
+step = int((time_idx.max() - time_idx.min()) / config.num_idx)
+start = int(config.start_idx_ratio * step) + time_idx.min()
+interp_idx = np.array(range(start, time_idx.max(), step))[:config.num_idx] # drop the last few samples
 
 ## Linear interpolation
 data_aligned = []

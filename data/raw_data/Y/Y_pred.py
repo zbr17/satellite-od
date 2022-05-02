@@ -9,12 +9,13 @@ from tqdm import tqdm
 #%%
 # Configuration
 class config:
-    num_params = 7
-    non_nan_thresh = 4
-    data_name = "sample"
+    start_idx_ratio = 0.5
+    num_idx = 132603
+    num_params = 10
+    data_name = "Y"
     data_path = "./data/raw_data/"
     data_out = "./data/"
-    abnormal_flag = 1627548600000
+    abnormal_flag = 1586851000000
 
 print(pd.to_datetime(config.abnormal_flag*1000000))
 df = pd.DataFrame({'date': ['2020-04-14 08:00:00.000']})
@@ -35,16 +36,19 @@ for file_name in tqdm(file_list):
 data_list = [data_dict[idx] for idx in sorted(list(data_dict.keys()), reverse=False)]
 data = pd.concat(data_list, axis=0)
 
+# Check the data
+print("total", len(data))
+for i in range(config.num_params):
+    print(f"param{i}", sum(~np.isnan(data[f"param{i}"])))
+
 #%%
 # Interpolation
 
 ## Compute the interpolation points
-non_nan_pos = ~np.isnan(data.values)
-non_nan_pos, = np.where(np.sum(non_nan_pos, axis=1) > config.non_nan_thresh)
-
-sub_data = data.iloc[non_nan_pos]
 time_idx = data['time'].values
-interp_idx = sub_data['time'].values
+step = int((time_idx.max() - time_idx.min()) / config.num_idx)
+start = int(config.start_idx_ratio * step) + time_idx.min()
+interp_idx = np.array(range(start, time_idx.max(), step))[:config.num_idx] # drop the last few samples
 
 ## Linear interpolation
 data_aligned = []
@@ -80,6 +84,6 @@ torch.save(data_to_save, f"{os.path.join(config.data_out, config.data_name)}.ckp
 
 #%%
 # Plot the data
-for i in range(7):
+for i in range(10):
     plt.figure()
     plt.plot(data_normed[:,i])
