@@ -23,7 +23,7 @@ class config:
         "val": 0.05,
         "test": 0.05
     }
-    sample_name = "out_12W" # sample / Y / out_25W / out_12W
+    sample_name = "out_25W" # sample / Y / out_25W / out_12W
     data_path = f"./data/{sample_name}.ckpt"
     # model
     input_dim_dict = {
@@ -42,7 +42,7 @@ class config:
     gamma = 0.5
     # general settings
     epochs = 2
-    save_path = f"./results/{sample_name}"
+    save_path = f"./results/cls/{sample_name}"
     save_interval = 10
     batch_size = 2048
 

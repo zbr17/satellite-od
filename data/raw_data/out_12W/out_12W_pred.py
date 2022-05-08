@@ -16,6 +16,7 @@ class config:
     data_path = "./data/raw_data/"
     data_out = "./data/"
     abnormal_flag = 1633075200000
+    increase = 1e-4
 
 print(pd.to_datetime(config.abnormal_flag*1000000))
 df = pd.DataFrame({'date': ['2020-04-14 08:00:00.000']})
@@ -60,12 +61,6 @@ for i in range(config.num_params):
 data_aligned = np.stack(data_aligned, axis=-1)
 
 #%%
-# Normalization
-mean_value = np.mean(data_aligned, axis=0, keepdims=True)
-std_value = np.std(data_aligned, axis=0, keepdims=True)
-data_normed = (data_aligned - mean_value) / (std_value + 1e-8)
-
-#%%
 # Generate the label
 flag = config.abnormal_flag
 label = np.zeros_like(interp_idx)
@@ -73,8 +68,11 @@ label[interp_idx > flag] = 1
 
 
 #%%
-data_normed[label == 1] += 2 * np.random.normal(size=(sum(label==1), config.num_params))
-
+# Normalization
+data_aligned[label == 1] += config.increase * np.sqrt(interp_idx[label==1] - flag).reshape(-1, 1)
+mean_value = np.mean(data_aligned, axis=0, keepdims=True)
+std_value = np.std(data_aligned, axis=0, keepdims=True)
+data_normed = (data_aligned - mean_value) / (std_value + 1e-8)
 
 #%% 
 # Save to PyTorch.ckpt
@@ -92,5 +90,6 @@ torch.save(data_to_save, f"{os.path.join(config.data_out, config.data_name)}.ckp
 for i in range(config.num_params):
     plt.figure()
     plt.plot(data_normed[:,i])
+    plt.savefig(f"./results/pred/out_12W/params{i}.png")
 
 # %%

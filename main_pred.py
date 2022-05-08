@@ -1,6 +1,8 @@
 #%%
+from cProfile import label
 import os
 import shutil
+from turtle import color
 import torch
 import numpy as np
 from tqdm import tqdm 
@@ -21,7 +23,7 @@ class config:
     train_idx_ratio = 0.9
     input_size = 10
     output_size = 1
-    sample_name = "Y" # sample / Y / out_25W / out_12W
+    sample_name = "out_25W" # sample / Y / out_25W / out_12W
     data_path = f"./data/{sample_name}.ckpt"
     # model
     input_dim_dict = {
@@ -38,7 +40,7 @@ class config:
     }
     input_dim = input_dim_dict[sample_name]
     hidden_dim = 64
-    model_layer = 2
+    model_layer = 3
     dete_thresh = thresh_dict[sample_name]
     # optimizer
     lr = 0.001
@@ -47,7 +49,7 @@ class config:
     step_size = 10
     gamma = 0.5
     # general settings
-    epochs = 3
+    epochs = 1
     save_path = f"./results/pred/{sample_name}"
     save_interval = 10
     batch_size = 2048
@@ -147,6 +149,10 @@ def validate(loader, model, criterion, config):
     data_iter = tqdm(loader)
     loss_list = []
     acc_list = []
+    output_list = []
+    target_list = []
+    label_list = []
+    timestamp_list = []
     TP, FP, TN, FN = 0, 0, 0, 0
     with torch.no_grad():
         for idx, (data, target, labels, timestamp) in enumerate(data_iter):
@@ -156,6 +162,10 @@ def validate(loader, model, criterion, config):
             labels = labels.to(device).view(-1)
             # model forward
             output = model(data)
+            output_list.append(output.cpu())
+            target_list.append(target.cpu())
+            label_list.append(labels.cpu())
+            timestamp_list.append(timestamp)
             # compute loss
             loss = criterion(output, target).sum(dim=-1).sum(dim=-1)
             loss_list.append(loss.sum().item())
@@ -171,6 +181,12 @@ def validate(loader, model, criterion, config):
     acc_meter.append(np.mean(acc_list))
     logger.info(f"Loss: {np.sum(loss_list)}, Acc: {np.mean(acc_list)}")
     logger.info(f"TP: {TP}/{TP+FP}, FP: {FP}/{TP+FP}, TN: {TN}/{TN+FN}, FN: {FN}/{TN+FN}")
+    return (
+        torch.cat(output_list, dim=0),
+        torch.cat(target_list, dim=0),
+        torch.cat(label_list, dim=0),
+        torch.cat(timestamp_list, dim=0)
+    )
 
 #%%
 # Start to train
@@ -232,7 +248,23 @@ with open(f"{os.path.join(config.save_path, 'time_info.txt')}", mode="w", encodi
 
 #%%
 # Test set
-validate(test_loader, model, criterion, config)
+out, trg, labels, timestamp = validate(test_loader, model, criterion, config)
+sep_idx = torch.where(labels==0)[0][-1]
+num_vis = 1000
+import matplotlib.pyplot as plt
+
+for i in range(config.input_dim):
+    plt.figure()
+    plt.grid()
+    s, e = sep_idx - num_vis, sep_idx
+    plt.plot(np.arange(s, e), out[s:e, :, i].flatten().numpy(), color="g", alpha=0.5, linestyle='--', label="pred")
+    plt.plot(np.arange(s, e), trg[s:e, :, i].flatten().numpy(), color="r", alpha=0.5, linestyle='--', label="truth")
+    s, e = sep_idx + 1, sep_idx + num_vis
+    plt.plot(np.arange(s, e), out[s:e, :, i].flatten().numpy(), color="g", label="pred-abnormal")
+    plt.plot(np.arange(s, e), trg[s:e, :, i].flatten().numpy(), color="r", label="truth-abnormal")
+    plt.legend()
+    plt.title(f"params{i} prediction")
+    plt.savefig(os.path.join(config.save_path, f"params_pred_{i}.png"))
 
 #%%
 # Draw figures
@@ -254,3 +286,5 @@ plt.xlabel("Iteration")
 plt.ylabel("Loss")
 plt.title("Loss Curve")
 plt.savefig(f"{os.path.join(config.save_path, 'loss.png')}")
+
+pass
