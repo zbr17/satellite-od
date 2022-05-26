@@ -5,6 +5,7 @@ import os
 import numpy as np
 import torch
 from tqdm import tqdm
+import json
 
 #%%
 # Configuration
@@ -16,6 +17,11 @@ class config:
     data_out = "./data/"
     abnormal_flag = 1633075200000
     increase = 1e-4
+
+with open("./data/raw_data/out_12W/config.json", mode="r", encoding="utf-8") as f:
+    config_data = json.load(f)
+    for k, v in config_data.items():
+        setattr(config, k, v)
 
 print(pd.to_datetime(config.abnormal_flag*1000000))
 df = pd.DataFrame({'date': ['2021-10-01 08:00:00.000']})

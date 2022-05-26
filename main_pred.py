@@ -15,7 +15,8 @@ import argparse
 
 parser = argparse.ArgumentParser()
 parser.add_argument("--lr", type=float, default=0.001)
-args = parser.parse_args(args=[])
+parser.add_argument("--name", type=str, default="sample")
+args = parser.parse_args()
 
 #%%
 class config:
@@ -23,7 +24,7 @@ class config:
     train_idx_ratio = 0.9
     input_size = 10
     output_size = 1
-    sample_name = "out_25W" # sample / Y / out_25W / out_12W
+    sample_name = args.name # sample / Y / out_25W / out_12W
     data_path = f"./data/{sample_name}.ckpt"
     # model
     input_dim_dict = {
@@ -53,6 +54,14 @@ class config:
     save_path = f"./results/pred/{sample_name}"
     save_interval = 10
     batch_size = 2048
+    # PT_curve
+    pt_dict = {
+        "out_12W": ("2021-10-01 08:00:00", "2021-10-01 18:14:26"),
+        "out_25W": ("2022-01-01 08:00:00", "2022-01-01 17:50:55"),
+        "sample": ("2021-07-29 08:50:00", "2021-07-29 09:55:00"),
+        "Y": ("2020-04-14 07:56:40", "2020-4-30 8:00:00")
+    }
+print(config.sample_name)
 
 #%%
 class LogMeter:
@@ -287,4 +296,83 @@ plt.ylabel("Loss")
 plt.title("Loss Curve")
 plt.savefig(f"{os.path.join(config.save_path, 'loss.png')}")
 
-pass
+#%%
+# Compute PT-curve and save timestamp
+data_iter = tqdm(test_loader)
+pred_list = []
+trg_list = []
+time_list = []
+with torch.no_grad():
+    for idx, (data, target, labels, timestamp) in enumerate(data_iter):
+        # data to device
+        data = data.to(device)
+        target = target.to(device)
+        labels = labels.to(device).view(-1)
+        timestamp = timestamp.view(-1)
+        # model forward
+        output = model(data)
+        # compute loss
+        loss = criterion(output, target).sum(dim=-1).sum(dim=-1)
+        # compute acc
+        pred = (loss > config.dete_thresh).long()
+        pred_list.append(pred)
+        trg_list.append(labels)
+        time_list.append(timestamp)
+pred_list = torch.cat(pred_list).cpu()
+trg_list = torch.cat(trg_list).cpu()
+time_list = torch.cat(time_list).cpu()
+
+sort_idx = torch.sort(time_list)[1]
+pred_list = pred_list[sort_idx]
+trg_list = trg_list[sort_idx]
+time_list = time_list[sort_idx]
+
+#%%
+import pandas as pd
+sn = config.sample_name
+def str2date(input):
+    df = pd.DataFrame({'date': [input]})
+    df['date'] = pd.to_datetime(df['date'])
+    df['date'] = df['date'].astype('int64')
+    return float(df.values / 1000000)
+start_time = str2date(config.pt_dict[sn][0])
+end_time = str2date(config.pt_dict[sn][1])
+time_mask = (time_list > start_time) & (time_list < end_time)
+
+time_list = time_list[time_mask]
+trg_list = trg_list[time_mask]
+pred_list = pred_list[time_mask]
+
+#%%
+import matplotlib.pyplot as plt
+acc_list = (pred_list == trg_list).float()
+acc_list = torch.cumsum(acc_list, dim=0) / (1+torch.arange(len(acc_list))).float()
+save_path = f"./data/raw_data/_pt_info/pred/{sn}"
+print(save_path)
+os.makedirs(save_path, exist_ok=True)
+def date2str(input):
+    return str(pd.to_datetime(1000000 * input))
+xtick_list = np.array([date2str(item)[:-7] for item in time_list.numpy().tolist()])
+
+step = len(time_list)
+if step > 6:
+    step = int(step / 6)
+print(f"Num: {step}")
+select_tick = np.arange(0, len(time_list), step)
+plt.figure()
+plt.grid()
+plt.plot(time_list.numpy(), acc_list.numpy())
+plt.xlabel("Timestamp")
+plt.ylabel("Precision")
+plt.xticks(time_list[select_tick], xtick_list[select_tick])
+plt.xticks(rotation=30)
+plt.title("Precision-Timestamp Curve")
+plt.savefig(os.path.join(save_path, "pt_curve.png"), bbox_inches='tight')
+
+error_time_list = time_list[pred_list != trg_list]
+print(len(error_time_list))
+with open(f"{os.path.join(save_path, 'time_info.txt')}", mode="w", encoding="utf-8") as f:
+    time_str = []
+    for i in range(len(error_time_list)):
+        time_str.append(str(pd.to_datetime(int(error_time_list[i]*1000000))) + "\n")
+    f.writelines(time_str)

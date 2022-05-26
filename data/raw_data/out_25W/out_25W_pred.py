@@ -17,12 +17,19 @@ class config:
     data_out = "./data/"
     abnormal_flag = 1641024000000
     increase = 1e-3
+    normal_range = [
+        [500, 1000],
+        [25, 50],
+        [-15, 55],
+        [-25, 60],
+        [0, 20]
+    ]
 
 print(pd.to_datetime(config.abnormal_flag*1000000))
-df = pd.DataFrame({'date': ['2020-04-14 08:00:00.000']})
+df = pd.DataFrame({'date': ['2020-04-14 08:00:00']})
 df['date'] = pd.to_datetime(df['date'])
 df['date'] = df['date'].astype('int64')
-print(df)
+print(df.values)
 
 #%%
 # Load all the data
@@ -72,6 +79,10 @@ label[interp_idx > flag] = 1
 data_aligned[label == 1] += config.increase * np.sqrt(interp_idx[label==1] - flag).reshape(-1, 1)
 mean_value = np.mean(data_aligned, axis=0, keepdims=True)
 std_value = np.std(data_aligned, axis=0, keepdims=True)
+for i in range(config.num_params):
+    plt.figure()
+    plt.plot(data_aligned[:,i])
+    plt.savefig(f"./data/raw_data/time_info/out_25W/params{i}.png")
 data_normed = (data_aligned - mean_value) / (std_value + 1e-8)
 
 
@@ -94,3 +105,16 @@ for i in range(config.num_params):
     plt.savefig(f"./results/pred/out_25W/params{i}.png")
 
 # %%
+# Save abnormal timestamps
+for i in range(config.num_params):
+    lower_bound = config.normal_range[i][0] + 10
+    upper_bound = config.normal_range[i][1] + 10
+    mask = (data_aligned[:, i] > upper_bound) | (data_aligned[:, i] < lower_bound)
+    sub_timestamp = interp_idx[mask]
+    with open(os.path.join("./data/raw_data/time_info/out_25W", f"time{i}.txt"), mode="w", encoding="utf-8") as f:
+        time_str = []
+        for i in tqdm(range(len(sub_timestamp))):
+            time_str.append(str(pd.to_datetime(sub_timestamp[i]*1000000)) + "\n")
+        f.writelines(time_str)
+
+#%%
