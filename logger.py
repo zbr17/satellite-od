@@ -22,8 +22,7 @@ def config_logger(output_dir, dist_rank=0, name='LOG'):
 
     # create console handlers for master process
     if dist_rank == 0:
-        if not os.path.exists(output_dir):
-            os.makedirs(output_dir)
+        os.makedirs(output_dir, exist_ok=True)
         console_handler = logging.StreamHandler(sys.stdout)
         console_handler.setLevel(logging.DEBUG)
         console_handler.setFormatter(

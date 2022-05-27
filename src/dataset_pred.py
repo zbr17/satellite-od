@@ -43,7 +43,7 @@ class TimeSeries(Dataset):
     def __getitem__(self, index):
         return self.input_list[index], self.output_list[index], self.output_label[index], self.output_time[index]
 
-def give_dataloader(config):
+def give_dataloader(config) -> dict:
     sample_set = TimeSeries(data_path=config.data_path, input_size=config.input_size, output_size=config.output_size, data_mask=None)
 
     label = sample_set.label
@@ -58,5 +58,8 @@ def give_dataloader(config):
     train_loader = DataLoader(train_set, batch_size=config.batch_size, shuffle=True, num_workers=8, drop_last=True)
     test_loader = DataLoader(test_set, batch_size=config.batch_size, shuffle=False, num_workers=8, drop_last=False)
 
-    return train_loader, test_loader
+    return {
+        "train": train_loader, 
+        "test": test_loader
+    }
 

@@ -28,7 +28,7 @@ class SampleSet(Dataset):
     def __getitem__(self, index):
         return self.data[index], self.label[index], self.time[index]
 
-def give_dataloader(config):
+def give_dataloader(config) -> dict:
     sample_set = SampleSet(data_path=config.data_path, data_mask=None)
     label = sample_set.label
     pos_idx = torch.where(label == 0)[0]
@@ -58,5 +58,9 @@ def give_dataloader(config):
     val_loader = DataLoader(val_set, batch_size=config.batch_size, shuffle=False, num_workers=8, drop_last=False)
     test_loader = DataLoader(test_set, batch_size=config.batch_size, shuffle=False, num_workers=8, drop_last=False)
 
-    return train_loader, val_loader, test_loader
+    return {
+        "train": train_loader,
+        "val": val_loader,
+        "test": test_loader,
+    }
 
