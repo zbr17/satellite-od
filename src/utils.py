@@ -169,14 +169,13 @@ def plot_pt_curve(type: str, model, criterion, loaders, config):
     trg_list = trg_list[sort_idx]
     time_list = time_list[sort_idx]
 
-    sn = config.sample_name
     def str2date(input):
         df = pd.DataFrame({'date': [input]})
         df['date'] = pd.to_datetime(df['date'])
         df['date'] = df['date'].astype('int64')
         return float(df.values / 1000000)
-    start_time = str2date(config.pt_dict[sn][0])
-    end_time = str2date(config.pt_dict[sn][1])
+    start_time = str2date(config.pt_range[0])
+    end_time = str2date(config.pt_range[1])
     time_mask = (time_list > start_time) & (time_list < end_time)
 
     time_list = time_list[time_mask]

@@ -5,31 +5,44 @@ import numpy as np
 import pandas as pd
 from tqdm import tqdm 
 import matplotlib.pyplot as plt
+import datetime
+import json
+from typing import Union
 
 from src.dataset_cls import give_dataloader
 from src.model_cls import classifier
 from src.utils import LogMeter, plot_cls_result
 
 import logger
+import tbwriter
 import argparse
 
 #%%
 class CONFIG:
-    def __init__(self, sample_name: str, lr: float):
-        self.sample_name = sample_name
-        self.lr = lr
+    def __init__(self, args: dict):
+        self.args = args
+        for k, v in args.items():
+            setattr(self, k, v)
+        
+        self.num_params: int = ...
+        self.pt_range: list = ...
+        self.choose_params_list: Union[str, list] = ...
+        
+    def update(self, args: dict):
+        for k, v in args.items():
+            if hasattr(self, k):
+                setattr(self, k, v)
+
         # dataset
         self.split_ratio = {"train": 0.9,"val": 0.05,"test": 0.05}
         self.data_path = f"./data/{self.sample_name}.ckpt"
         # model
-        input_dim_dict = {
-            "sample": 7,
-            "Y": 10,
-            "out_25W": 5,
-            "out_12W": 5,
-            "gf": 5
-        }
-        self.input_dim = input_dim_dict[self.sample_name]
+        if self.choose_params_list == "all":
+            self.input_dim = self.num_params
+        else:
+            assert isinstance(self.choose_params_list, list)
+            self.input_dim = len(self.choose_params_list)
+        
         self.size_list = [self.input_dim, 64, 64, 2]
         # optimizer
         self.weight_decay = 1e-4
@@ -38,22 +51,23 @@ class CONFIG:
         self.gamma = 0.5
         # general settings
         self.epochs = 1
-        self.save_path = f"./results/cls/{self.sample_name}"
+        if not self.search:
+            self.save_path = f"./results/cls/{self.sample_name}"
+        else:
+            self.save_path = f"./results_serach/cls/{self.sample_name}-{datetime.datetime.now().strftime('%Y%m%d%H%M')}"
         self.save_interval = 10
         self.batch_size = 2048
         # PT_curve
-        self.pt_dict = {
-            "out_12W": ("2021-10-01 08:00:00", "2021-10-01 18:14:26"),
-            "out_25W": ("2022-01-01 08:00:00", "2022-01-01 17:50:55"),
-            "sample": ("2021-07-29 08:50:00", "2021-07-29 09:55:00"),
-            "Y": ("2020-04-14 07:56:40", "2020-4-30 8:00:00"),
-            "gf": ("2022-02-01 00:00:00", "2022-02-03 12:00:00") # FIXME
-        }
+        self.pt_range = self.pt_range
 
 def initiate(args):
-    config = CONFIG(args.sample_name, args.lr)
+    config = CONFIG(args)
+    with open(os.path.join(args["raw_data"], args["sample_name"], "config.json"), mode="r", encoding="utf-8") as f:
+        config_data = json.load(f)
+        config.update(config_data)
 
     logger.config_logger(output_dir=config.save_path, dist_rank=0, name="LOG")
+    tbwriter.config(output_dir=config.save_path, dist_rank=0)
     device = torch.device("cuda:0")
     config.device = device
 
@@ -66,7 +80,7 @@ def initiate(args):
     ).to(device)
 
     # get optimizer and scheduler
-    optimizer = torch.optim.Adam(model.parameters(), lr=config.lr, weight_decay=config.weight_decay)
+    optimizer = torch.optim.AdamW(model.parameters(), lr=config.lr, weight_decay=config.weight_decay)
     scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=config.step_size, gamma=config.gamma)
 
     # get criterion
@@ -75,6 +89,7 @@ def initiate(args):
     return config, loaders, model, optimizer, scheduler, criterion
 
 def train_one_epoch(loaders, model, criterion, optimizer, scheduler, loss_meter, acc_meter, config):
+    model.train()
     logger.info("Training phase:")
     train_iter = tqdm(loaders["train"])
     loss_list = []
@@ -93,6 +108,7 @@ def train_one_epoch(loaders, model, criterion, optimizer, scheduler, loss_meter,
 
         if idx % 100 == 0:
             validate(loaders["val"], model, criterion, acc_meter, config)
+            model.train()
 
         # backward
         optimizer.zero_grad()
@@ -103,6 +119,7 @@ def train_one_epoch(loaders, model, criterion, optimizer, scheduler, loss_meter,
     logger.info(f"Loss: {np.sum(loss_list)}")
 
 def validate(loader, model, criterion, acc_meter, config):
+    model.eval()
     logger.info("Validation phase:")
     data_iter = tqdm(loader)
     loss_list = []
@@ -152,14 +169,27 @@ def run(config, loaders, model, optimizer, scheduler, criterion):
     # Plot
     plot_cls_result(acc_meter, loss_meter, config)
 
+    # Tensorboard
+    tbwriter.add_hparams(
+        hparam_dict=config.args,
+        metric_dict={"hparam/acc": max(acc_meter.value_list)}
+    )
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--lr", type=float, default=0.001)
-    parser.add_argument("--sample_name", type=str, default="gf", help="")
+    parser.add_argument("--sample_name", type=str, default="Y", help="")
+    parser.add_argument("--raw_data", type=str, default="./data/raw_data")
+    parser.add_argument("--search", action="store_true", default=False)
     args = parser.parse_args()
 
+    config_args = {}
+    for k in dir(args):
+        if not k.startswith("_") and not k.endswith("__"):
+            config_args[k] = getattr(args, k)
+
     # Initiate
-    config, loaders, model, optimizer, scheduler, criterion = initiate(args)
+    config, loaders, model, optimizer, scheduler, criterion = initiate(config_args)
     # Train and test
     run(config, loaders, model, optimizer, scheduler, criterion)
 

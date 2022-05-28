@@ -1,5 +1,5 @@
 #%%
-from typing import Tuple
+from typing import Tuple, Union
 import pandas as pd 
 import matplotlib.pyplot as plt
 import os
@@ -11,6 +11,7 @@ import argparse
 
 class CONFIG:
     num_params: int = ...
+    choose_params_list: Union[str, list] = ...
     abnormal_flag: int = ...
     is_gen_abnormal: bool = ...
     gen_abnormal_amp: float = ...
@@ -56,6 +57,13 @@ def load_data(config: CONFIG) -> pd.DataFrame:
         data_dict[file_idx] = pd.read_csv(os.path.join(data_path, file_name))
     data_list = [data_dict[idx] for idx in sorted(list(data_dict.keys()), reverse=False)]
     data = pd.concat(data_list, axis=0)
+
+    if isinstance(config.choose_params_list, list):
+        for i in range(config.num_params):
+            if i not in config.choose_params_list:
+                data = data.drop(f"param{i}", axis=1)
+        config.num_params = len(config.choose_params_list)
+
     return data
 
 def interp(config: CONFIG, data: pd.DataFrame) -> Tuple[np.ndarray]:
@@ -72,7 +80,11 @@ def interp(config: CONFIG, data: pd.DataFrame) -> Tuple[np.ndarray]:
 
     ## Linear interpolation
     data_aligned = []
-    for i in range(config.num_params):
+    params_idx = (range(config.num_params) 
+        if config.choose_params_list == "all"
+        else config.choose_params_list
+    )
+    for i in params_idx:
         non_nan_list = ~np.isnan(data[f"param{i}"])
         xp = time_idx[non_nan_list]
         fp = data[f"param{i}"].values[non_nan_list]
@@ -123,7 +135,7 @@ def plot_data(config: CONFIG, data: np.ndarray) -> None:
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser("Data preprocess")
-    parser.add_argument("--data-name", type=str, default="gf")
+    parser.add_argument("--data-name", type=str, default="Y")
     opt = parser.parse_args(args=[])
 
     # Get config

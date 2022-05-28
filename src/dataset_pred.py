@@ -11,6 +11,7 @@ class TimeSeries(Dataset):
         data_mask=None,
     ):
         super().__init__()
+        self.mean_delta: float = ...
         self.data_path = data_path
         self.input_size = input_size
         self.output_size = output_size
@@ -33,9 +34,24 @@ class TimeSeries(Dataset):
         output_idx = torch.arange(self.output_size).unsqueeze(0) + offset_idx + self.input_size
         output_idx = output_idx.flatten()
         self.input_list = self.data[input_idx, :].reshape(-1, self.input_size, self.dim)
+        self.input_time = self.time[input_idx].reshape(-1, self.input_size)
         self.output_list = self.data[output_idx, :].reshape(-1, self.output_size, self.dim)
         self.output_label = self.label[output_idx].reshape(-1, self.output_size)
         self.output_time = self.time[output_idx].reshape(-1, self.output_size)
+
+        # Add time position
+        zero_time = self.input_time[:, -1].unsqueeze(-1)
+        input_time = (self.input_time - zero_time).float()
+        output_time = (self.output_time - zero_time).float()
+        self.mean_delta = torch.mean(torch.abs(input_time)) * 10
+        # tanh function
+        input_time = torch.tanh(input_time / self.mean_delta)
+        output_time = torch.tanh(output_time / self.mean_delta)
+        # concat data
+        data_padding = torch.zeros(self.input_list.size(0), 1, self.input_list.size(-1))
+        data_padding = torch.cat([data_padding, output_time.unsqueeze(-1)], dim=-1)
+        self.input_list = torch.cat([self.input_list, input_time.unsqueeze(-1)], dim=-1)
+        self.input_list = torch.cat([self.input_list, data_padding], dim=1)
     
     def __len__(self):
         return len(self.input_list)

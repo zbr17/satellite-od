@@ -1,6 +1,8 @@
 {
     "num_params": 5,
+    "choose_params_list": "all",
     "abnormal_flag": 1641024000000,
     "is_gen_abnormal": true,
-    "gen_abnormal_amp": 0.0001
+    "gen_abnormal_amp": 0.0001,
+    "pt_range": ["2022-01-01 08:00:00", "2022-01-01 17:50:55"]
 }

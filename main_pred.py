@@ -5,62 +5,69 @@ import numpy as np
 import pandas as pd
 from tqdm import tqdm 
 import matplotlib.pyplot as plt
+import datetime
+import json
+from typing import Union
 
 from src.dataset_pred import give_dataloader
-from src.model_pred import RNN
+from src.model_pred import give_model
 from src.utils import LogMeter, plot_pred_result
 
 import logger
+import tbwriter
 import argparse
 
 #%%
 class CONFIG:
-    def __init__(self, sample_name: str, lr: float):
-        self.sample_name = sample_name
-        self.lr = lr
+    def __init__(self, args: dict):
+        self.args = args
+        for k, v in args.items():
+            setattr(self, k, v)
+
+        self.num_params: int = ...
+        self.pt_range: list = ...
+        self.choose_params_list: Union[str, list] = ...
+
+    def update(self, args: dict):
+        for k, v in args.items():
+            if hasattr(self, k):
+                setattr(self, k, v)
+
         # dataset
-        self.train_idx_ratio, self.input_size, self.output_size = 0.9, 10, 1
+        self.train_idx_ratio, self.input_size, self.output_size = 0.8, 10, 1
         self.data_path = f"./data/{self.sample_name}.ckpt"
         # model
-        input_dim_dict = {
-            "sample": 7,
-            "Y": 10,
-            "out_25W": 5,
-            "out_12W": 5,
-            "gf": 5
-        }
-        self.input_dim = input_dim_dict[self.sample_name]
-        self.hidden_dim, self.model_layer = 64, 3
-        thresh_dict = {
-            "sample": 8,
-            "Y": 10,
-            "out_25W": 5,
-            "out_12W": 5
-        }
-        self.dete_thresh = thresh_dict[self.sample_name]
+        if self.choose_params_list == "all":
+            self.input_dim = self.num_params
+        else:
+            assert isinstance(self.choose_params_list, list)
+            self.input_dim = len(self.choose_params_list)
+
+        self.dete_thresh = 0.2
         # optimizer
-        self.weight_decay = 1e-4
+        self.weight_decay = 0.0001
         # scheduler
         self.step_size = 10
         self.gamma = 0.5
         # general settings
-        self.epochs = 1
-        self.save_path = f"./results/pred/{self.sample_name}"
+        self.epochs = 5
+        if not self.search:
+            self.save_path = f"./results/pred/{self.model_name}/{self.sample_name}"
+        else:
+            self.save_path = f"./results_serach/pred/{self.model_name}/{self.sample_name}-{datetime.datetime.now().strftime('%Y%m%d%H%M')}"
         self.save_interval = 10
         self.batch_size = 2048
         # PT_curve
-        self.pt_dict = {
-            "out_12W": ("2021-10-01 08:00:00", "2021-10-01 18:14:26"),
-            "out_25W": ("2022-01-01 08:00:00", "2022-01-01 17:50:55"),
-            "sample": ("2021-07-29 08:50:00", "2021-07-29 09:55:00"),
-            "Y": ("2020-04-14 07:56:40", "2020-4-30 8:00:00"),
-            "gf": ("2022-02-01 00:00:00", "2022-02-03 12:00:00") # FIXME
-        }
+        self.pt_range = self.pt_range
 
 def initiate(args):
-    config = CONFIG(args.sample_name, args.lr)
+    config = CONFIG(args)
+    with open(os.path.join(args["raw_data"], args["sample_name"], "config.json"), mode="r", encoding="utf-8") as f:
+        config_data = json.load(f)
+        config.update(config_data)
 
     logger.config_logger(output_dir=config.save_path, dist_rank=0, name="LOG")
+    tbwriter.config(output_dir=config.save_path, dist_rank=0)
     device = torch.device("cuda:0")
     config.device = device
 
@@ -68,15 +75,10 @@ def initiate(args):
     loaders = give_dataloader(config)
 
     # get model
-    model = RNN(
-        input_size=config.input_dim,
-        hidden_size=config.hidden_dim,
-        num_layers=config.model_layer,
-        out_size=config.output_size
-    ).to(device)
+    model = give_model(config).to(device)
 
     # get optimizer and scheduler
-    optimizer = torch.optim.Adam(model.parameters(), lr=config.lr, weight_decay=config.weight_decay)
+    optimizer = torch.optim.AdamW(model.parameters(), lr=config.lr, weight_decay=config.weight_decay)
     scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=config.step_size, gamma=config.gamma)
 
     # get criterion
@@ -85,6 +87,7 @@ def initiate(args):
     return config, loaders, model, optimizer, scheduler, criterion
 
 def train_one_epoch(loaders, model, criterion, optimizer, scheduler, loss_meter, acc_meter, config):
+    model.train()
     logger.info("Training phase:")
     train_iter = tqdm(loaders["train"])
     loss_list = []
@@ -102,7 +105,11 @@ def train_one_epoch(loaders, model, criterion, optimizer, scheduler, loss_meter,
             train_iter.set_description(f"Loss: {loss.item()}")
 
         if idx % 100 == 0:
+            # compute thresh
+            thresh_loss_list, labels = compute_loss(loaders["test"], model, criterion, config)
+            config.dete_thresh = compute_thresh(thresh_loss_list, labels)
             validate(loaders["test"], model, criterion, acc_meter, config)
+            model.train()
 
         # backward
         optimizer.zero_grad()
@@ -114,7 +121,7 @@ def train_one_epoch(loaders, model, criterion, optimizer, scheduler, loss_meter,
 
 def compute_loss(loader, model, criterion, config):
     data_iter = tqdm(loader)
-    loss_list = []
+    loss_list, labels_list = [], []
     with torch.no_grad():
         for idx, (data, target, labels, timestamp) in enumerate(data_iter):
             # data to device
@@ -125,14 +132,23 @@ def compute_loss(loader, model, criterion, config):
             # compute loss
             loss = criterion(output, target).sum(dim=-1).sum(dim=-1)
             loss_list.extend(loss.cpu().detach().numpy().tolist())
-    return loss_list
+            labels_list.extend(labels.cpu().squeeze().numpy().tolist())
+    return torch.tensor(loss_list), torch.tensor(labels_list)
 
-def compute_thresh(loss_list):
-    # compute threshold
-    thresh = np.mean(sorted(loss_list)[-10000:]) * 1.1
-    return thresh
+def compute_thresh(loss_list, labels):
+    loss_sorted, idx_sorted = torch.sort(loss_list)
+    label_sorted = labels[idx_sorted]
+    pos_cum = torch.cumsum(label_sorted == 0, dim=0)
+    neg_cum = torch.cumsum((label_sorted == 1).flip(0), dim=0).flip(0)
+    cum = pos_cum + neg_cum
+    thresh = loss_sorted[cum.argmax()]
+    bestacc = cum.max() / len(labels)
+    logger.info(f"thresh: {thresh.item()}, bestacc: {bestacc.item()}")
+
+    return thresh.item()
 
 def validate(loader, model, criterion, acc_meter, config):
+    model.eval()
     logger.info("Validation phase:")
     data_iter = tqdm(loader)
     loss_list = []
@@ -197,14 +213,31 @@ def run(config, loaders, model, optimizer, scheduler, criterion):
     # Plot
     plot_pred_result(acc_meter, loss_meter, config)
 
+    # Tensorboard
+    tbwriter.add_hparams(
+        hparam_dict=config.args,
+        metric_dict={"hparam/acc": max(acc_meter.value_list)}
+    )
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--lr", type=float, default=0.001)
-    parser.add_argument("--name", type=str, default="out_12W", help="")
+    parser.add_argument("--sample_name", type=str, default="Y", help="")
+    parser.add_argument("--raw_data", type=str, default="./data/raw_data")
+    parser.add_argument("--hidden_dim", type=int, default=64)
+    parser.add_argument("--model_name", type=str, default="lstm")
+    parser.add_argument("--model_layer", type=int, default=2)
+    parser.add_argument("--nhead", type=int, default=4)
+    parser.add_argument("--search", action="store_true", default=False)
     args = parser.parse_args()
+
+    config_args = {}
+    for k in dir(args):
+        if not k.startswith("_") and not k.endswith("__"):
+            config_args[k] = getattr(args, k)
     
     # Initiate
-    config, loaders, model, optimizer, scheduler, criterion = initiate(args)
+    config, loaders, model, optimizer, scheduler, criterion = initiate(config_args)
     # Train and test
     run(config, loaders, model, optimizer, scheduler, criterion)
 
