@@ -68,8 +68,8 @@ def save_err_time(time_list, config):
         f.writelines(time_str)
 
 def plot_err_pred(out, trg, labels, config):
-    sep_idx = torch.where(labels==0)[0][-1]
-    num_vis = 1000
+    sep_idx = torch.where(labels==1)[0][0] - 1
+    num_vis = 200
 
     for i in range(config.input_dim):
         plt.figure()
@@ -82,7 +82,7 @@ def plot_err_pred(out, trg, labels, config):
         plt.plot(np.arange(s, e), trg[s:e, :, i].flatten().numpy(), color="r", label="truth-abnormal")
         plt.legend()
         plt.title(f"params{i} prediction")
-        plt.savefig(os.path.join(config.save_path, f"params_pred_{i}.png"))
+        plt.savefig(os.path.join(config.save_path, f"params_pred_{i}.pdf"), dpi=300, format="pdf")
 
 def plot_cls_result(acc_meter, loss_meter, config):
     plt.figure()
@@ -91,7 +91,7 @@ def plot_cls_result(acc_meter, loss_meter, config):
     plt.xlabel("Iteration")
     plt.ylabel("Accuracy")
     plt.title("Accuracy Curve")
-    plt.savefig(f"{os.path.join(config.save_path, 'acc.png')}")
+    plt.savefig(f"{os.path.join(config.save_path, 'acc.pdf')}", dpi=300, format="pdf")
 
     plt.figure()
     plt.grid()
@@ -99,7 +99,7 @@ def plot_cls_result(acc_meter, loss_meter, config):
     plt.xlabel("Iteration")
     plt.ylabel("Loss")
     plt.title("Loss Curve")
-    plt.savefig(f"{os.path.join(config.save_path, 'loss.png')}")
+    plt.savefig(f"{os.path.join(config.save_path, 'loss.pdf')}", dpi=300, format="pdf")
 
 def plot_pred_result(acc_meter, loss_meter, config):
     plt.figure()
@@ -109,7 +109,7 @@ def plot_pred_result(acc_meter, loss_meter, config):
     plt.ylim(0, 1.1)
     plt.ylabel("Loss")
     plt.title("Loss Curve")
-    plt.savefig(f"{os.path.join(config.save_path, 'acc.png')}")
+    plt.savefig(f"{os.path.join(config.save_path, 'acc.pdf')}", dpi=300, format="pdf")
 
     plt.figure()
     plt.grid()
@@ -117,7 +117,7 @@ def plot_pred_result(acc_meter, loss_meter, config):
     plt.xlabel("Iteration")
     plt.ylabel("Loss")
     plt.title("Loss Curve")
-    plt.savefig(f"{os.path.join(config.save_path, 'loss.png')}")
+    plt.savefig(f"{os.path.join(config.save_path, 'loss.pdf')}", dpi=300, format="pdf")
 
 def plot_pt_curve(type: str, model, criterion, loaders, config):
     device = config.device
@@ -195,15 +195,16 @@ def plot_pt_curve(type: str, model, criterion, loaders, config):
         step = int(step / 6)
     print(f"Num: {step}")
     select_tick = np.arange(0, len(time_list), step)
+    time_list = torch.abs(time_list - time_list.max())
     plt.figure()
     plt.grid()
     plt.plot(time_list.numpy(), acc_list.numpy())
     plt.xlabel("Timestamp")
     plt.ylabel("Precision")
-    plt.xticks(time_list[select_tick], xtick_list[select_tick])
-    plt.xticks(rotation=30)
+    # plt.xticks(time_list[select_tick], xtick_list[select_tick])
+    # plt.xticks(rotation=30)
     plt.title("Precision-Timestamp Curve")
-    plt.savefig(os.path.join(save_path, "pt_curve.png"), bbox_inches='tight')
+    plt.savefig(os.path.join(save_path, "pt_curve.pdf"), bbox_inches='tight', dpi=300, format="pdf")
 
     error_time_list = time_list[pred_list != trg_list]
     print(len(error_time_list))

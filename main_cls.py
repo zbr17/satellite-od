@@ -178,7 +178,7 @@ def run(config, loaders, model, optimizer, scheduler, criterion):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--lr", type=float, default=0.001)
-    parser.add_argument("--sample_name", type=str, default="Y", help="")
+    parser.add_argument("--sample_name", type=str, default="gf", help="")
     parser.add_argument("--raw_data", type=str, default="./data/raw_data")
     parser.add_argument("--search", action="store_true", default=False)
     args = parser.parse_args()

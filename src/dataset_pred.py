@@ -63,10 +63,20 @@ def give_dataloader(config) -> dict:
     sample_set = TimeSeries(data_path=config.data_path, input_size=config.input_size, output_size=config.output_size, data_mask=None)
 
     label = sample_set.label
-    pos_idx_len = len(torch.where(label == 0)[0])
-    train_idx_end = int(config.train_idx_ratio * pos_idx_len)
-    train_idx_mask = torch.arange(train_idx_end)
-    test_idx_mask = torch.arange(train_idx_end, len(sample_set))
+    flag = config.abnormal_flag
+    if isinstance(flag, int):
+        pos_idx_len = len(torch.where(label == 0)[0])
+        train_idx_end = int(config.train_idx_ratio * pos_idx_len)
+        train_idx_mask = torch.arange(train_idx_end)
+        test_idx_mask = torch.arange(train_idx_end, len(sample_set))
+    elif isinstance(flag, list):
+        assert len(flag) == 2
+        neg_idx = torch.where(label == 1)[0].numpy().tolist()
+        test_idx = list(range(neg_idx[0]-len(neg_idx), neg_idx[0])) + neg_idx
+        train_idx = list(set(range(len(sample_set))).difference(set(test_idx)))
+        test_idx_mask = torch.tensor(test_idx).long()
+        train_idx_mask = torch.tensor(train_idx).long()
+
 
     train_set = TimeSeries(data_path=config.data_path, input_size=config.input_size, output_size=config.output_size, data_mask=train_idx_mask)
     test_set = TimeSeries(data_path=config.data_path, input_size=config.input_size, output_size=config.output_size, data_mask=test_idx_mask)

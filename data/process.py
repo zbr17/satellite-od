@@ -12,7 +12,7 @@ import argparse
 class CONFIG:
     num_params: int = ...
     choose_params_list: Union[str, list] = ...
-    abnormal_flag: int = ...
+    abnormal_flag: Union[int, list] = ...
     is_gen_abnormal: bool = ...
     gen_abnormal_amp: float = ...
     data_name: str = ...
@@ -29,8 +29,11 @@ def str2date(input: str) -> int:
     output = pd.to_datetime(df["date"]).astype("int64")
     return output
 
-def date2str(input: int) -> str:
-    return pd.to_datetime(input * 1000000)
+def date2str(input: Union[int, list]) -> str:
+    if isinstance(input, int):
+        return pd.to_datetime(input * 1000000)
+    elif isinstance(input, list):
+        return [date2str(item) for item in input]
 
 def get_config(data_name: str) -> CONFIG:
     config = CONFIG()
@@ -97,8 +100,13 @@ def get_label(config: CONFIG, interp_idx: np.ndarray) -> np.ndarray:
     Generate the label
     """
     flag = config.abnormal_flag
-    label = np.zeros_like(interp_idx)
-    label[interp_idx > flag] = 1
+    if isinstance(flag, int):
+        label = np.zeros_like(interp_idx)
+        label[interp_idx > flag] = 1
+    elif isinstance(flag, list):
+        assert len(flag) == 2
+        label = np.zeros_like(interp_idx)
+        label[(interp_idx > flag[0]) & (interp_idx < flag[1])] = 1
     return label
 
 def postprocess(config: CONFIG, label: np.ndarray, interp_idx: np.ndarray, data_aligned: np.ndarray) -> np.ndarray:
@@ -135,8 +143,8 @@ def plot_data(config: CONFIG, data: np.ndarray) -> None:
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser("Data preprocess")
-    parser.add_argument("--data-name", type=str, default="Y")
-    opt = parser.parse_args(args=[])
+    parser.add_argument("--data-name", type=str, default="gf")
+    opt = parser.parse_args()
 
     # Get config
     config = get_config(opt.data_name)
