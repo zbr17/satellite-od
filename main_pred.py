@@ -223,10 +223,10 @@ def run(config, loaders, model, optimizer, scheduler, criterion):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--lr", type=float, default=0.001)
-    parser.add_argument("--sample_name", type=str, default="gf", help="")
+    parser.add_argument("--sample_name", type=str, default="Y", help="")
     parser.add_argument("--raw_data", type=str, default="./data/raw_data")
     parser.add_argument("--hidden_dim", type=int, default=64)
-    parser.add_argument("--model_name", type=str, default="transformer")
+    parser.add_argument("--model_name", type=str, default="lstm")
     parser.add_argument("--model_layer", type=int, default=2)
     parser.add_argument("--nhead", type=int, default=4)
     parser.add_argument("--search", action="store_true", default=False)
@@ -251,7 +251,11 @@ if __name__ == "__main__":
     save_err_time(time_list, config)
     # get test performance
     from src.utils import plot_err_pred
-    out, trg, labels, timestamp = validate(loaders["test"], model, criterion, LogMeter(), config)
+    out1, trg1, labels1, timestamp = validate(loaders["train"], model, criterion, LogMeter(), config)
+    out2, trg2, labels2, timestamp = validate(loaders["test"], model, criterion, LogMeter(), config)
+    out = torch.cat([out1, out2], dim=0)
+    trg = torch.cat([trg1, trg2], dim=0)
+    labels = torch.cat([labels1, labels2], dim=0)
     plot_err_pred(out, trg, labels, config)
     # get pt-curve
     from src.utils import plot_pt_curve

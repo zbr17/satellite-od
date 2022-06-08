@@ -2,4 +2,5 @@ results/
 data/raw_data/*/*.csv
 data/*.rar
 data/*.ckpt
+data/tmp/
 __pycache__/

@@ -54,12 +54,24 @@ def load_data(config: CONFIG) -> pd.DataFrame:
     data_path = os.path.join(config.data_path, config.data_name)
     file_list = os.listdir(data_path)
     file_list = [item for item in file_list if ".csv" in item]
-    data_dict = {}
+    # data_dict = {}
+    # for file_name in tqdm(file_list):
+    #     file_idx = int(file_name.split(".")[0])
+    #     data_dict[file_idx] = pd.read_csv(os.path.join(data_path, file_name))
+    # data_list = [data_dict[idx] for idx in sorted(list(data_dict.keys()), reverse=False)]
+    # data = pd.concat(data_list, axis=0)
+    # data = data.reset_index(drop=True)
+    # data = data.drop(data.columns[0], axis=1)
+    # print(data)
+
+    data = pd.DataFrame()
     for file_name in tqdm(file_list):
-        file_idx = int(file_name.split(".")[0])
-        data_dict[file_idx] = pd.read_csv(os.path.join(data_path, file_name))
-    data_list = [data_dict[idx] for idx in sorted(list(data_dict.keys()), reverse=False)]
-    data = pd.concat(data_list, axis=0)
+        file_path = os.path.join(data_path, file_name)
+        data = data.append(pd.read_csv(file_path))
+    data.sort_values(by=data.columns[1], inplace=True, ascending=True)
+    data = data.drop(data.columns[0], axis=1)
+    data = data.reset_index(drop=True)
+    print(data)
 
     if isinstance(config.choose_params_list, list):
         for i in range(config.num_params):
@@ -135,17 +147,19 @@ def save2ckpt(config: CONFIG, data_normed: np.ndarray, interp_idx: np.ndarray, l
     }
     torch.save(data_to_save, f"{os.path.join(config.data_out, config.data_name)}.ckpt")
 
-def plot_data(config: CONFIG, data: np.ndarray) -> None:
+def plot_data(config: CONFIG, data: np.ndarray, title="") -> None:
     # Plot the data
     for i in range(config.num_params):
         plt.figure()
+        plt.title(f"{title}-{i}")
         plt.plot(data[:,i])
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser("Data preprocess")
-    parser.add_argument("--data-name", type=str, default="gf")
+    parser.add_argument("--data-name", type=str, default="Y")
     opt = parser.parse_args()
 
+    os.chdir(os.path.abspath(os.path.join(__file__, "../../")))
     # Get config
     config = get_config(opt.data_name)
     # Load data
@@ -159,4 +173,4 @@ if __name__ == "__main__":
     # Save ckpt
     save2ckpt(config, data_normed, interp_idx, label)
     # Plot
-    plot_data(config, data_normed)
+    plot_data(config, data_normed, title="norm")

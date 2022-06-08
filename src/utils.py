@@ -69,17 +69,20 @@ def save_err_time(time_list, config):
 
 def plot_err_pred(out, trg, labels, config):
     sep_idx = torch.where(labels==1)[0][0] - 1
-    num_vis = 200
+    neg_len = len(torch.where(labels==1)[0])
+    import matplotlib as mpl
+    mpl.rcParams['agg.path.chunksize'] = 10000
 
     for i in range(config.input_dim):
         plt.figure()
         plt.grid()
-        s, e = sep_idx - num_vis, sep_idx
+        s, e = max(0, sep_idx-neg_len), sep_idx
         plt.plot(np.arange(s, e), out[s:e, :, i].flatten().numpy(), color="g", alpha=0.5, linestyle='--', label="pred")
         plt.plot(np.arange(s, e), trg[s:e, :, i].flatten().numpy(), color="r", alpha=0.5, linestyle='--', label="truth")
-        s, e = sep_idx + 1, sep_idx + num_vis
+        s, e = sep_idx + 1, sep_idx + neg_len
         plt.plot(np.arange(s, e), out[s:e, :, i].flatten().numpy(), color="g", label="pred-abnormal")
         plt.plot(np.arange(s, e), trg[s:e, :, i].flatten().numpy(), color="r", label="truth-abnormal")
+        plt.ylim([-1,1])
         plt.legend()
         plt.title(f"params{i} prediction")
         plt.savefig(os.path.join(config.save_path, f"params_pred_{i}.pdf"), dpi=300, format="pdf")
