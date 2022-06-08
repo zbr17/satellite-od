@@ -3,5 +3,6 @@
     "choose_params_list": "all",
     "abnormal_flag": [1643772840000, 1643785020000],
     "is_gen_abnormal": false,
-    "pt_range": ["2022-01-28 00:00:00", "2022-02-02 12:00:00"]
+    "non_nan_thresh": 3,
+    "pt_range": ["2022-01-20 00:00:00", "2022-02-02 11:34:00"]
 }

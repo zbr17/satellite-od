@@ -8,6 +8,7 @@ import matplotlib.pyplot as plt
 import datetime
 import json
 from typing import Union
+torch.multiprocessing.set_sharing_strategy('file_system')
 
 from src.dataset_cls import give_dataloader
 from src.model_cls import classifier
@@ -50,7 +51,7 @@ class CONFIG:
         self.step_size = 10
         self.gamma = 0.5
         # general settings
-        self.epochs = 1
+        self.epochs = 2
         if not self.search:
             self.save_path = f"./results/cls/{self.sample_name}"
         else:

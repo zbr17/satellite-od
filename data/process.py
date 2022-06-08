@@ -156,7 +156,7 @@ def plot_data(config: CONFIG, data: np.ndarray, title="") -> None:
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser("Data preprocess")
-    parser.add_argument("--data-name", type=str, default="Y")
+    parser.add_argument("--data-name", type=str, default="gf")
     opt = parser.parse_args()
 
     os.chdir(os.path.abspath(os.path.join(__file__, "../../")))

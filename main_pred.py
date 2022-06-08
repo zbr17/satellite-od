@@ -8,6 +8,7 @@ import matplotlib.pyplot as plt
 import datetime
 import json
 from typing import Union
+torch.multiprocessing.set_sharing_strategy('file_system')
 
 from src.dataset_pred import give_dataloader
 from src.model_pred import give_model
@@ -51,7 +52,6 @@ class CONFIG:
         self.step_size = 10
         self.gamma = 0.5
         # general settings
-        self.epochs = 5
         if not self.search:
             self.save_path = f"./results/pred/{self.model_name}/{self.sample_name}"
         else:
@@ -223,12 +223,13 @@ def run(config, loaders, model, optimizer, scheduler, criterion):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--lr", type=float, default=0.001)
-    parser.add_argument("--sample_name", type=str, default="Y", help="")
+    parser.add_argument("--sample_name", type=str, default="sample", help="")
     parser.add_argument("--raw_data", type=str, default="./data/raw_data")
     parser.add_argument("--hidden_dim", type=int, default=64)
     parser.add_argument("--model_name", type=str, default="lstm")
-    parser.add_argument("--model_layer", type=int, default=2)
+    parser.add_argument("--model_layer", type=int, default=3)
     parser.add_argument("--nhead", type=int, default=4)
+    parser.add_argument("--epochs", type=int, default=5)
     parser.add_argument("--search", action="store_true", default=False)
     args = parser.parse_args()
 
