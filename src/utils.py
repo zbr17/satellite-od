@@ -85,7 +85,7 @@ def plot_err_pred(out, trg, labels, config):
         plt.plot(np.arange(s, e), trg[s:e, :, i].flatten().numpy(), color="r", label="truth-abnormal")
         mean_val2 = torch.mean(out[s:e, :, i]) + torch.mean(trg[s:e, :, i])
         mean_val = 0.25 * (mean_val1 + mean_val2)
-        plt.ylim([mean_val-2,mean_val+2])
+        plt.ylim([mean_val-1,mean_val+1])
         plt.legend()
         plt.title(f"params{i} prediction")
         plt.savefig(os.path.join(config.save_path, f"params_pred_{i}.pdf"), dpi=300, format="pdf")

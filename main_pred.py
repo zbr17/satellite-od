@@ -223,13 +223,13 @@ def run(config, loaders, model, optimizer, scheduler, criterion):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--lr", type=float, default=0.001)
-    parser.add_argument("--sample_name", type=str, default="sample", help="")
+    parser.add_argument("--sample_name", type=str, default="Y", help="")
     parser.add_argument("--raw_data", type=str, default="./data/raw_data")
     parser.add_argument("--hidden_dim", type=int, default=64)
     parser.add_argument("--model_name", type=str, default="lstm")
-    parser.add_argument("--model_layer", type=int, default=3)
-    parser.add_argument("--nhead", type=int, default=4)
-    parser.add_argument("--epochs", type=int, default=5)
+    parser.add_argument("--model_layer", type=int, default=2)
+    parser.add_argument("--nhead", type=int, default=2)
+    parser.add_argument("--epochs", type=int, default=3)
     parser.add_argument("--search", action="store_true", default=False)
     args = parser.parse_args()
 

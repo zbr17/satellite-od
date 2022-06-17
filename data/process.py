@@ -154,10 +154,22 @@ def plot_data(config: CONFIG, data: np.ndarray, title="") -> None:
         plt.title(f"{title}-{i}")
         plt.plot(data[:,i])
 
+        plt.ylim([-1, 1])
+
+def low_filter(low_filter, data, idx, label):
+    new_len = len(data) - (low_filter - 1)
+    dim = data.shape[1]
+    data_new = np.zeros((new_len, dim))
+    for i in tqdm(range(new_len)):
+        data_new[i, :] = np.median(data[i:(i+low_filter), :], axis=0)
+    return data_new, idx[(low_filter-1):], label[(low_filter-1):]
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser("Data preprocess")
-    parser.add_argument("--data-name", type=str, default="gf")
-    opt = parser.parse_args()
+    parser.add_argument("--data-name", type=str, default="Y")
+    parser.add_argument("--low-filter", type=int, default=30)
+    parser.add_argument("--denoise", type=float, default=None)
+    opt = parser.parse_args(args=[])
 
     os.chdir(os.path.abspath(os.path.join(__file__, "../../")))
     # Get config
@@ -170,6 +182,10 @@ if __name__ == "__main__":
     label = get_label(config, interp_idx)
     # Normalize
     data_normed = postprocess(config, label, interp_idx, data_aligned)
+    # Low-pass filter
+    if opt.low_filter != 1:
+        data_normed, interp_idx, label = low_filter(opt.low_filter, data_normed, interp_idx, label)
+
     # Save ckpt
     save2ckpt(config, data_normed, interp_idx, label)
     # Plot

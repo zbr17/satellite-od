@@ -1,6 +1,6 @@
 {
     "num_params": 10,
-    "choose_params_list": "all",
+    "choose_params_list": [0, 1, 2, 4, 5, 6],
     "abnormal_flag": 1586851000000,
     "is_gen_abnormal": false,
     "non_nan_thresh": 3,
