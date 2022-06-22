@@ -6,7 +6,6 @@ import math
 class PositionEncoder(nn.Module):
     def __init__(self, dim=7, max_len=10000):
         super().__init__()
-        raise NotImplementedError
         self.dim = dim
         self.max_len = max_len
 
@@ -22,18 +21,18 @@ class PositionEncoder(nn.Module):
     
     def forward(self, x):
         return x + self.position_emb[:x.size(0), :] 
-    
+
 class Transformer(nn.Module):
-    def __init__(self, input_size=7, feature_size=64, num_layers=1, nhead=8, dropout=0.1):
+    def __init__(self, input_size, hidden_size, num_layers, out_size, nhead=8, dropout=0.1):
         super().__init__()
         self.input_size = input_size
         self.num_layers = num_layers
-        self.feature_size = feature_size
+        self.feature_size = hidden_size
         self.nhead = nhead
+        self.out_size = out_size
         self.dropout = dropout
         self.src_mask = None
         
-
         self.input_embedder = nn.Linear(self.input_size, self.feature_size)
         self.position_encoder = PositionEncoder(dim=self.input_size)
         self.encoder_layer = nn.TransformerEncoderLayer(d_model=self.feature_size, nhead=self.nhead, dropout=self.dropout)
@@ -58,6 +57,9 @@ class Transformer(nn.Module):
         src = self.input_embedder(src)
         output = self.transformer_encoder(src, self.src_mask)
         output = self.decoder(output)
+
+        output = output[:, -self.out_size:, :]
+        output = output[:, :, :-1]
         return output
     
     def _generate_square_subsequent_mask(self, sz):

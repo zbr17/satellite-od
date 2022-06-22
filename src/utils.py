@@ -36,6 +36,24 @@ def get_cls_err_time(loader, model, criterion, time_list, config):
             pred = torch.max(output, dim=-1)[1]
             time_list.extend(timestamp[pred==1].cpu().numpy().tolist())
 
+def get_prediction(loss, config):
+    if config.num_false == 1:
+        return (loss > config.dete_thresh).long()
+    else:
+        step = config.num_false
+        pred = (loss > config.dete_thresh).long()
+        pred = torch.nn.functional.pad(pred, (step-1, step-1), "constant", 0)
+        pred_list = []
+        for shift in range(-step+1, step):
+            pred_new = torch.roll(pred, shifts=shift, dims=-1)
+            pred_list.append(pred_new)
+        preds = torch.stack(pred_list, dim=-1)
+        pred_final = (torch.sum(preds, dim=-1) > (step-1)).long()[(step-1):-(step-1)]
+
+        return pred_final
+
+        
+
 def get_pred_err_time(loader, model, criterion, time_list, config):
     data_iter = tqdm(loader)
     loss_list = []
@@ -52,7 +70,7 @@ def get_pred_err_time(loader, model, criterion, time_list, config):
             loss = criterion(output, target).sum(dim=-1).sum(dim=-1)
             loss_list.append(loss.sum().item())
             # compute acc
-            pred = (loss > config.dete_thresh).long()
+            pred = get_prediction(loss, config)
             time_list.extend(timestamp[pred==1].cpu().numpy().tolist())
     return time_list
 
@@ -160,7 +178,7 @@ def plot_pt_curve(type: str, model, criterion, loaders, config):
                 # compute loss
                 loss = criterion(output, target).sum(dim=-1).sum(dim=-1)
                 # compute acc
-                pred = (loss > config.dete_thresh).long()
+                pred = get_prediction(loss, config)
                 pred_list.append(pred)
                 trg_list.append(labels)
                 time_list.append(timestamp)
@@ -202,10 +220,10 @@ def plot_pt_curve(type: str, model, criterion, loaders, config):
         step = int(step / 6)
     print(f"Num: {step}")
     select_tick = np.arange(0, len(time_list), step)
-    time_list = torch.abs(time_list - time_list.max())
+    delta_time_list = torch.abs(time_list - time_list.max())
     plt.figure()
     plt.grid()
-    plt.plot(time_list.numpy(), acc_list.numpy())
+    plt.plot(delta_time_list.numpy(), acc_list.numpy())
     plt.xlabel("Timestamp")
     plt.ylim(0, 1.1)
     plt.ylabel("Precision")

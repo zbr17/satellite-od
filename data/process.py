@@ -167,7 +167,7 @@ def low_filter(low_filter, data, idx, label):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser("Data preprocess")
     parser.add_argument("--data-name", type=str, default="Y")
-    parser.add_argument("--low-filter", type=int, default=30)
+    parser.add_argument("--low-filter", type=int, default=60)
     parser.add_argument("--denoise", type=float, default=None)
     opt = parser.parse_args(args=[])
 

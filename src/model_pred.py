@@ -1,6 +1,7 @@
 import torch
 import torch.nn as nn
 import torch.nn.init as init
+import math
 
 def give_model(config):
     if config.model_name == "lstm":
@@ -66,7 +67,8 @@ class Transformer(nn.Module):
 
         encoder_layer = nn.TransformerEncoderLayer(
             d_model=self.hidden_size,
-            nhead=nhead
+            nhead=nhead,
+            batch_first=True,
         )
         self.transformer = nn.TransformerEncoder(
             encoder_layer=encoder_layer,

@@ -12,7 +12,7 @@ torch.multiprocessing.set_sharing_strategy('file_system')
 
 from src.dataset_pred import give_dataloader
 from src.model_pred import give_model
-from src.utils import LogMeter, plot_pred_result
+from src.utils import LogMeter, plot_pred_result, get_prediction
 
 import logger
 import tbwriter
@@ -53,7 +53,7 @@ class CONFIG:
         self.gamma = 0.5
         # general settings
         if not self.search:
-            self.save_path = f"./results/pred/{self.model_name}/{self.sample_name}"
+            self.save_path = f"./results/pred/{self.model_name}/{self.sample_name}{self.tag}"
         else:
             self.save_path = f"./results_serach/pred/{self.model_name}/{self.sample_name}-{datetime.datetime.now().strftime('%Y%m%d%H%M')}"
         self.save_interval = 10
@@ -148,7 +148,9 @@ def compute_thresh(loss_list, labels):
 
     return thresh.item()
 
-def validate(loader, model, criterion, acc_meter, config):
+
+
+def validate(loader, model, criterion, acc_meter, config, is_out=True):
     model.eval()
     logger.info("Validation phase:")
     data_iter = tqdm(loader)
@@ -175,7 +177,7 @@ def validate(loader, model, criterion, acc_meter, config):
             loss = criterion(output, target).sum(dim=-1).sum(dim=-1)
             loss_list.append(loss.sum().item())
             # compute acc
-            pred = (loss > config.dete_thresh).long()
+            pred = get_prediction(loss, config)
             acc_list.append((torch.sum(labels==pred) / len(labels)).item())
             # statistic the confusion matrix
             TP += torch.sum((pred==0) & (labels==0))
@@ -184,8 +186,9 @@ def validate(loader, model, criterion, acc_meter, config):
             FN += torch.sum((pred==0) & (labels==1))
 
     acc_meter.append(np.mean(acc_list))
-    logger.info(f"Loss: {np.sum(loss_list)}, Acc: {np.mean(acc_list)}")
-    logger.info(f"TP: {TP}/{TP+FP}, FP: {FP}/{TP+FP}, TN: {TN}/{TN+FN}, FN: {FN}/{TN+FN}")
+    if is_out:
+        logger.info(f"Loss: {np.sum(loss_list)}, Acc: {np.mean(acc_list)}")
+        logger.info(f"TP: {TP}/{TP+FP}, FP: {FP}/{TP+FP}, TN: {TN}/{TN+FN}, FN: {FN}/{TN+FN}")
     return (
         torch.cat(output_list, dim=0),
         torch.cat(target_list, dim=0),
@@ -226,11 +229,13 @@ if __name__ == "__main__":
     parser.add_argument("--sample_name", type=str, default="Y", help="")
     parser.add_argument("--raw_data", type=str, default="./data/raw_data")
     parser.add_argument("--hidden_dim", type=int, default=64)
-    parser.add_argument("--model_name", type=str, default="lstm")
-    parser.add_argument("--model_layer", type=int, default=2)
-    parser.add_argument("--nhead", type=int, default=2)
-    parser.add_argument("--epochs", type=int, default=3)
+    parser.add_argument("--model_name", type=str, default="transformer")
+    parser.add_argument("--model_layer", type=int, default=3)
+    parser.add_argument("--nhead", type=int, default=8)
+    parser.add_argument("--epochs", type=int, default=5)
     parser.add_argument("--search", action="store_true", default=False)
+    parser.add_argument("--num_false", type=int, default=10)
+    parser.add_argument("--tag", type=str, default="")
     args = parser.parse_args()
 
     config_args = {}
@@ -252,8 +257,8 @@ if __name__ == "__main__":
     save_err_time(time_list, config)
     # get test performance
     from src.utils import plot_err_pred
-    out1, trg1, labels1, timestamp = validate(loaders["train"], model, criterion, LogMeter(), config)
-    out2, trg2, labels2, timestamp = validate(loaders["test"], model, criterion, LogMeter(), config)
+    out1, trg1, labels1, timestamp = validate(loaders["train"], model, criterion, LogMeter(), config, False)
+    out2, trg2, labels2, timestamp = validate(loaders["test"], model, criterion, LogMeter(), config, False)
     out = torch.cat([out1, out2], dim=0)
     trg = torch.cat([trg1, trg2], dim=0)
     labels = torch.cat([labels1, labels2], dim=0)

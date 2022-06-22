@@ -44,7 +44,7 @@ class CONFIG:
             assert isinstance(self.choose_params_list, list)
             self.input_dim = len(self.choose_params_list)
         
-        self.size_list = [self.input_dim, 64, 64, 2]
+        self.size_list = [self.input_dim] + [self.hidden_dim] * (self.num_layer-1) + [2]
         # optimizer
         self.weight_decay = 1e-4
         # scheduler
@@ -179,9 +179,11 @@ def run(config, loaders, model, optimizer, scheduler, criterion):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--lr", type=float, default=0.001)
-    parser.add_argument("--sample_name", type=str, default="gf", help="")
+    parser.add_argument("--sample_name", type=str, default="Y", help="")
     parser.add_argument("--raw_data", type=str, default="./data/raw_data")
     parser.add_argument("--search", action="store_true", default=False)
+    parser.add_argument("--num_layer", type=int, default=3)
+    parser.add_argument("--hidden_dim", type=int, default=64)
     args = parser.parse_args()
 
     config_args = {}
